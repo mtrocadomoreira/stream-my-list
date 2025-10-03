@@ -611,6 +611,13 @@ class MovieStreamingApp {
         const modal = document.getElementById('config-modal');
         modal.classList.remove('hidden');
         this.goToCountriesStep();
+
+        // Store current configuration to detect changes
+        this.previousConfig = {
+            countries: [...this.state.selectedCountries],
+            services: [...this.state.selectedServices]
+        };
+
         await this.fetchCountries();
     }
 
@@ -860,8 +867,52 @@ class MovieStreamingApp {
     }
 
     saveConfiguration() {
-        this.closeModal();
-        this.updateUI();
+        // Check if configuration has changed
+        const configChanged = this.hasConfigurationChanged();
+
+        if (configChanged) {
+            // Clear streaming data cache since countries/services changed
+            this.cache.streamingData = {};
+            this.saveCacheToStorage();
+
+            // Clear current results
+            this.state.movies = [];
+            this.state.filteredMovies = [];
+
+            // If on results page, automatically trigger new search
+            if (this.state.currentPage === 'results') {
+                this.closeModal();
+                this.updateUI();
+                // Trigger new search with updated configuration
+                this.searchMovies();
+            } else {
+                this.closeModal();
+                this.updateUI();
+            }
+        } else {
+            this.closeModal();
+            this.updateUI();
+        }
+    }
+
+    hasConfigurationChanged() {
+        if (!this.previousConfig) return false;
+
+        // Check if countries changed
+        const countriesChanged =
+            this.state.selectedCountries.length !== this.previousConfig.countries.length ||
+            !this.state.selectedCountries.every((c, i) =>
+                c.iso_3166_1 === this.previousConfig.countries[i]?.iso_3166_1
+            );
+
+        // Check if services changed
+        const servicesChanged =
+            this.state.selectedServices.length !== this.previousConfig.services.length ||
+            !this.state.selectedServices.every((s, i) =>
+                s.provider_id === this.previousConfig.services[i]?.provider_id
+            );
+
+        return countriesChanged || servicesChanged;
     }
 
     cancelSearch() {
@@ -1293,10 +1344,11 @@ class MovieStreamingApp {
 
         const streamingHtml = Object.entries(movie.streaming_availability).map(([countryCode, data]) => {
             const services = data.services.map(service => {
-                return `<img src="https://image.tmdb.org/t/p/original${service.logo_path}"
-                            alt="${service.provider_name}"
-                            title="${service.provider_name}"
-                            class="service-icon">`;
+                return `<a href="${data.link}" target="_blank" rel="noopener noreferrer" class="service-icon-link" title="${service.provider_name}">
+                            <img src="https://image.tmdb.org/t/p/original${service.logo_path}"
+                                alt="${service.provider_name}"
+                                class="service-icon">
+                        </a>`;
             }).join('');
 
             return `
@@ -1315,7 +1367,11 @@ class MovieStreamingApp {
                      alt="${movie.title}">
             </div>
             <div class="movie-info">
-                <h3 class="movie-title">${movie.title}</h3>
+                <h3 class="movie-title">
+                    <a href="https://www.themoviedb.org/movie/${movie.id}" target="_blank" rel="noopener noreferrer" class="movie-title-link">
+                        ${movie.title}
+                    </a>
+                </h3>
                 <div class="movie-meta">
                     <span class="movie-year">${year}</span>
                 </div>
@@ -1337,18 +1393,3 @@ class MovieStreamingApp {
 document.addEventListener('DOMContentLoaded', () => {
     new MovieStreamingApp();
 });
-
-
-// TODOS
-// x implement caching to reduce API calls
-// x add request throttling/queuing
-// - implement proper error handling for rate limit responses (HTTP 429) and cache responses where appropriate
-// - add attribution to TMDB and JustWatch (plus links)
-// x add TMDB authentication (login, API requests using session_id)
-// - add instructions about how to import IMDB watchlist to TMDB (https://www.themoviedb.org/settings/import-list, need to be logged in)
-// - message if retrieval is taking too long, or if several options are selected
-// - add this disclaimer: 
-//      This [website, program, service, application, product] uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB.
-// - add this credit thingy:
-// Made with ❤️ and 🌀 (hyperfocus) by Mariana Moreira
-// Find the source code on GitHub
