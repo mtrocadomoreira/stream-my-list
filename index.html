@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Special+Gothic+Expanded+One&display=swap" rel="stylesheet">
+    <title>Stream My List</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Home Page -->
+        <div id="home-page" class="page active">
+            <header class="header">
+                <div class="squiggly-line"></div>
+                <h1 class="header__title">
+                    Stream My List
+                    <div class="squiggly-underline"></div>
+                </h1>
+                <p class="header__subtitle">Find where your watchlist movies are streaming</p>
+                <div class="squiggly-line"></div>
+            </header>
+
+            <div class="main-form">
+                <!-- Authentication Section -->
+                <div id="auth-section" class="auth-section">
+                    <!-- Logged Out State -->
+                    <div id="login-container" class="login-container">
+                        <button id="login-btn" class="btn btn--primary">
+                            <span>🔐</span>
+                            Login with TMDB
+                        </button>
+                        <div class="remember-me-container">
+                            <input type="checkbox" id="remember-me" checked>
+                            <label for="remember-me">Remember me</label>
+                        </div>
+                    </div>
+
+                    <!-- Logged In State -->
+                    <div id="user-profile" class="user-profile hidden">
+                        <div class="user-info">
+                            <span class="user-status">✓ Logged in as</span>
+                            <span id="username-display" class="username"></span>
+                        </div>
+                        <button id="logout-btn" class="btn btn--outline btn--small">Logout</button>
+                    </div>
+                </div>
+
+                <div class="button-group">
+                    <button id="config-btn" class="btn btn--secondary">
+                        <span>🌍</span>
+                        Select countries & streaming services
+                    </button>
+
+                    <button id="search-btn" class="btn btn--primary" disabled>
+                        <span>🍿</span>
+                        Tell me what to stream
+                    </button>
+                </div>
+
+                <div id="config-status" class="config-status hidden">
+                    <div class="status status--success">
+                        <span>✓</span>
+                        Configuration saved: <span id="config-summary"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Page -->
+        <div id="results-page" class="page">
+            <div class="results-header">
+                <div class="results-nav">
+                    <button id="back-home-btn" class="btn btn--outline">← Back to Home</button>
+                    <h2 class="results-title">Your streaming options (<span id="movie-count">0</span> movies)</h2>
+                </div>
+                <div class="squiggly-line"></div>
+            </div>
+
+            <div class="results-controls">
+                <div class="controls-row">
+                    <div class="sort-control">
+                        <label class="form-label" for="sort-select">Sort by:</label>
+                        <select id="sort-select" class="form-control">
+                            <option value="relevance">Relevance</option>
+                            <option value="year">Release Year</option>
+                            <option value="rating">Rating</option>
+                            <option value="popularity">Popularity</option>
+                            <option value="title">Title</option>
+                        </select>
+                    </div>
+
+                    <button id="filters-toggle" class="btn btn--secondary">
+                        <span>⚙️</span>
+                        Filters
+                    </button>
+                </div>
+
+                <div id="filters-panel" class="filters-panel hidden">
+                    <div class="filters-grid">
+                        <div class="filter-group">
+                            <h4>Year</h4>
+                            <div class="range-control">
+                                <div class="range-values">
+                                    <span id="year-min-value">1900</span> - <span id="year-max-value">2025</span>
+                                </div>
+                                <div class="dual-range-slider">
+                                    <input type="range" id="filter-year-min" class="range-slider" min="1900" max="2025" value="1900">
+                                    <input type="range" id="filter-year-max" class="range-slider" min="1900" max="2025" value="2025">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="filter-group">
+                            <h4>Rating</h4>
+                            <div class="range-control">
+                                <div class="range-values">
+                                    <span id="rating-min-value">0.0</span> - <span id="rating-max-value">10.0</span>
+                                </div>
+                                <div class="dual-range-slider">
+                                    <input type="range" id="filter-rating-min" class="range-slider" min="0" max="10" step="0.1" value="0">
+                                    <input type="range" id="filter-rating-max" class="range-slider" min="0" max="10" step="0.1" value="10">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="filter-group">
+                            <h4>Genre</h4>
+                            <div id="filter-genre-list" class="checkbox-group"></div>
+                        </div>
+
+                        <div class="filter-group">
+                            <h4>Streaming Service</h4>
+                            <div id="filter-service-list" class="checkbox-group"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="loading" class="loading hidden">
+                <div class="loading-spinner"></div>
+                <p>Finding your movies...</p>
+            </div>
+
+            <div id="movies-grid" class="movies-grid"></div>
+        </div>
+
+        <!-- Configuration Modal -->
+        <div id="config-modal" class="modal hidden">
+            <div class="modal-backdrop"></div>
+            <div class="modal-content">
+                <!-- Step 1: Countries -->
+                <div id="countries-step" class="modal-step active">
+                    <div class="modal-header">
+                        <h3>Select Countries</h3>
+                        <button id="close-modal" class="btn-close">×</button>
+                    </div>
+
+                    <div class="modal-body">
+                        <p class="modal-description">Choose the countries where you want to check streaming availability:</p>
+                        <div class="search-box">
+                            <input type="text" id="country-search" class="form-control" placeholder="Search countries...">
+                        </div>
+                        <div id="countries-list" class="checkbox-grid"></div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button id="continue-to-services" class="btn btn--primary" disabled>
+                            Continue to Streaming Services →
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Step 2: Streaming Services -->
+                <div id="services-step" class="modal-step">
+                    <div class="modal-header">
+                        <h3>Select Streaming Services</h3>
+                        <button id="close-modal-2" class="btn-close">×</button>
+                    </div>
+
+                    <div class="modal-body">
+                        <p class="modal-description">Choose the streaming services you have access to:</p>
+                        <div class="search-box">
+                            <input type="text" id="service-search" class="form-control" placeholder="Search services...">
+                        </div>
+                        <div id="services-list" class="checkbox-grid"></div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button id="back-to-countries" class="btn btn--outline">← Back</button>
+                        <button id="save-config" class="btn btn--primary" disabled>Done ✓</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
