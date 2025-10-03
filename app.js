@@ -41,7 +41,29 @@ class MovieStreamingApp {
 
         this.rateLimiting = {
             requests: [],
-            maxRequestsPerSecond: 4
+            maxRequestsPerSecond: 40
+        };
+
+        this.cache = {
+            watchlist: null,
+            watchlistExpiry: null,
+            streamingData: {}, // movieId -> {data, expiry}
+            genres: null,
+            genresExpiry: null
+        };
+
+        this.cacheConfig = {
+            watchlistTTL: 60 * 60 * 1000, // 1 hour
+            streamingTTL: 24 * 60 * 60 * 1000, // 24 hours
+            genresTTL: 7 * 24 * 60 * 60 * 1000 // 7 days
+        };
+
+        this.searchState = {
+            isSearching: false,
+            shouldCancel: false,
+            totalMovies: 0,
+            processedMovies: 0,
+            foundMovies: 0
         };
 
         this.init();
@@ -49,9 +71,96 @@ class MovieStreamingApp {
 
     init() {
         this.loadStoredSession();
+        this.loadCacheFromStorage();
         this.handleAuthCallback();
         this.bindEvents();
         this.updateUI();
+    }
+
+    // ===== Cache Management =====
+
+    loadCacheFromStorage() {
+        try {
+            const stored = localStorage.getItem('tmdb_cache');
+            if (!stored) return;
+
+            const cacheData = JSON.parse(stored);
+            this.cache = {
+                watchlist: cacheData.watchlist || null,
+                watchlistExpiry: cacheData.watchlistExpiry || null,
+                streamingData: cacheData.streamingData || {},
+                genres: cacheData.genres || null,
+                genresExpiry: cacheData.genresExpiry || null
+            };
+        } catch (error) {
+            console.error('Error loading cache:', error);
+            this.clearCache();
+        }
+    }
+
+    saveCacheToStorage() {
+        try {
+            localStorage.setItem('tmdb_cache', JSON.stringify(this.cache));
+        } catch (error) {
+            console.error('Error saving cache:', error);
+        }
+    }
+
+    clearCache() {
+        this.cache = {
+            watchlist: null,
+            watchlistExpiry: null,
+            streamingData: {},
+            genres: null,
+            genresExpiry: null
+        };
+        try {
+            localStorage.removeItem('tmdb_cache');
+        } catch (error) {
+            console.error('Error clearing cache:', error);
+        }
+    }
+
+    getCachedWatchlist() {
+        if (this.cache.watchlist && this.cache.watchlistExpiry && Date.now() < this.cache.watchlistExpiry) {
+            return this.cache.watchlist;
+        }
+        return null;
+    }
+
+    setCachedWatchlist(data) {
+        this.cache.watchlist = data;
+        this.cache.watchlistExpiry = Date.now() + this.cacheConfig.watchlistTTL;
+        this.saveCacheToStorage();
+    }
+
+    getCachedStreamingInfo(movieId) {
+        const cached = this.cache.streamingData[movieId];
+        if (cached && Date.now() < cached.expiry) {
+            return cached.data;
+        }
+        return null;
+    }
+
+    setCachedStreamingInfo(movieId, data) {
+        this.cache.streamingData[movieId] = {
+            data: data,
+            expiry: Date.now() + this.cacheConfig.streamingTTL
+        };
+        this.saveCacheToStorage();
+    }
+
+    getCachedGenres() {
+        if (this.cache.genres && this.cache.genresExpiry && Date.now() < this.cache.genresExpiry) {
+            return this.cache.genres;
+        }
+        return null;
+    }
+
+    setCachedGenres(genres) {
+        this.cache.genres = genres;
+        this.cache.genresExpiry = Date.now() + this.cacheConfig.genresTTL;
+        this.saveCacheToStorage();
     }
 
     // ===== localStorage Management =====
@@ -287,6 +396,7 @@ class MovieStreamingApp {
         this.state.requestToken = '';
         this.state.isAuthenticated = false;
         this.clearStoredSession();
+        this.clearCache(); // Also clear cache on logout
         this.updateUI();
     }
 
@@ -356,6 +466,10 @@ class MovieStreamingApp {
 
         document.getElementById('search-btn').addEventListener('click', () => {
             this.searchMovies();
+        });
+
+        document.getElementById('cancel-search').addEventListener('click', () => {
+            this.cancelSearch();
         });
 
         // Modal events
@@ -487,7 +601,7 @@ class MovieStreamingApp {
             configStatus.classList.remove('hidden');
             const countryNames = this.state.selectedCountries.map(c => c.english_name).join(', ');
             const serviceNames = this.state.selectedServices.map(s => s.provider_name).join(', ');
-            configSummary.innerHTML = `<p class="mb-2">Selected: ${countryNames}</p><p>Services: ${serviceNames}</p>`;
+            configSummary.innerHTML = `<p class="mb-2">Selected countries: ${countryNames}</p><p>Selected services: ${serviceNames}</p>`;
         } else {
             configStatus.classList.add('hidden');
         }
@@ -573,6 +687,13 @@ class MovieStreamingApp {
     }
 
     async fetchGenres() {
+        // Check cache first
+        const cachedGenres = this.getCachedGenres();
+        if (cachedGenres) {
+            this.data.genres = cachedGenres;
+            return;
+        }
+
         try {
             const response = await this.throttleRequest(() =>
                 fetch('https://api.themoviedb.org/3/genre/movie/list?language=en', {
@@ -584,6 +705,7 @@ class MovieStreamingApp {
             (data.genres || []).forEach(genre => {
                 this.data.genres[genre.id] = genre.name;
             });
+            this.setCachedGenres(this.data.genres);
         } catch (error) {
             console.error('Error fetching genres:', error);
         }
@@ -742,53 +864,157 @@ class MovieStreamingApp {
         this.updateUI();
     }
 
+    cancelSearch() {
+        this.searchState.shouldCancel = true;
+    }
+
+    updateProgress() {
+        const percent = this.searchState.totalMovies > 0
+            ? Math.round((this.searchState.processedMovies / this.searchState.totalMovies) * 100)
+            : 0;
+
+        document.getElementById('progress-text').textContent =
+            `Processing ${this.searchState.processedMovies} of ${this.searchState.totalMovies} movies...`;
+        document.getElementById('found-text').textContent =
+            `Found: ${this.searchState.foundMovies}`;
+        document.getElementById('progress-fill').style.width = `${percent}%`;
+    }
+
     async searchMovies() {
-        this.showLoading('movies-grid');
+        // Reset search state
+        this.searchState = {
+            isSearching: true,
+            shouldCancel: false,
+            totalMovies: 0,
+            processedMovies: 0,
+            foundMovies: 0
+        };
+
         this.goToResultsPage();
+        this.state.movies = [];
+        this.state.filteredMovies = [];
+
+        // Clear movies grid and show loading
+        document.getElementById('movies-grid').innerHTML = '';
+        document.getElementById('loading').classList.remove('hidden');
+        document.getElementById('loading-text').textContent = 'Checking cache...';
+        document.getElementById('progress-container').classList.add('hidden');
 
         try {
             await this.fetchGenres();
-            let allResults = [];
-            let page = 1;
-            let hasMore = true;
 
-            while (hasMore) {
-                const response = await this.throttleRequest(() =>
-                    fetch(
-                        `https://api.themoviedb.org/3/account/${this.state.accountId}/watchlist/movies?language=en-US&page=${page}&sort_by=created_at.asc&session_id=${this.state.sessionId}`,
-                        { headers: { 'Authorization': `Bearer ${this.state.apiKey}` } }
-                    )
-                );
-                const data = await response.json();
+            // Check if we have cached watchlist
+            const cachedWatchlist = this.getCachedWatchlist();
+            let allWatchlistMovies = [];
 
-                if (data.results && data.results.length > 0) {
-                    const moviesWithStreaming = await Promise.all(
-                        data.results.map(async (movie) => {
-                            const streamingData = await this.fetchStreamingInfo(movie.id);
-                            return { ...movie, streaming_availability: streamingData };
-                        })
+            if (cachedWatchlist) {
+                allWatchlistMovies = cachedWatchlist;
+                document.getElementById('loading-text').textContent = 'Found cached watchlist! Loading streaming data...';
+            } else {
+                // Fetch all watchlist pages
+                document.getElementById('loading-text').textContent = 'Fetching your watchlist...';
+                let page = 1;
+                let hasMore = true;
+
+                while (hasMore && !this.searchState.shouldCancel) {
+                    const response = await this.throttleRequest(() =>
+                        fetch(
+                            `https://api.themoviedb.org/3/account/${this.state.accountId}/watchlist/movies?language=en-US&page=${page}&sort_by=created_at.asc&session_id=${this.state.sessionId}`,
+                            { headers: { 'Authorization': `Bearer ${this.state.apiKey}` } }
+                        )
                     );
+                    const data = await response.json();
 
-                    const matched = moviesWithStreaming.filter(m =>
-                        Object.keys(m.streaming_availability).length > 0
-                    );
-                    allResults = [...allResults, ...matched];
-                    page++;
-                } else {
-                    hasMore = false;
+                    if (data.results && data.results.length > 0) {
+                        allWatchlistMovies = [...allWatchlistMovies, ...data.results];
+                        page++;
+                    } else {
+                        hasMore = false;
+                    }
+                }
+
+                // Cache the watchlist
+                if (allWatchlistMovies.length > 0) {
+                    this.setCachedWatchlist(allWatchlistMovies);
                 }
             }
 
-            this.state.movies = allResults;
-            this.renderGenreFilters();
-            this.renderServiceFilters();
-            this.applyFiltersAndSort();
+            if (this.searchState.shouldCancel) {
+                this.hideLoading();
+                return;
+            }
+
+            // Initialize progress tracking
+            this.searchState.totalMovies = allWatchlistMovies.length;
+            document.getElementById('loading-text').textContent = 'Processing movies...';
+            document.getElementById('progress-container').classList.remove('hidden');
+            this.updateProgress();
+
+            // Process movies in batches of 15
+            const BATCH_SIZE = 15;
+            const allResults = [];
+
+            for (let i = 0; i < allWatchlistMovies.length; i += BATCH_SIZE) {
+                if (this.searchState.shouldCancel) {
+                    break;
+                }
+
+                const batch = allWatchlistMovies.slice(i, i + BATCH_SIZE);
+
+                // Process batch with caching
+                const moviesWithStreaming = await Promise.all(
+                    batch.map(async (movie) => {
+                        const streamingData = await this.fetchStreamingInfoCached(movie.id);
+                        this.searchState.processedMovies++;
+                        this.updateProgress();
+                        return { ...movie, streaming_availability: streamingData };
+                    })
+                );
+
+                // Filter movies that have streaming availability
+                const matched = moviesWithStreaming.filter(m =>
+                    Object.keys(m.streaming_availability).length > 0
+                );
+
+                allResults.push(...matched);
+                this.searchState.foundMovies = allResults.length;
+                this.updateProgress();
+
+                // Update UI with current results (progressive display)
+                this.state.movies = allResults;
+                this.renderGenreFilters();
+                this.renderServiceFilters();
+                this.applyFiltersAndSort();
+            }
+
             this.hideLoading();
+            this.searchState.isSearching = false;
+
+            if (this.searchState.shouldCancel) {
+                document.getElementById('loading-text').textContent = 'Search cancelled';
+            }
         } catch (error) {
             console.error('Error fetching movies:', error);
             this.showError('movies-grid', 'Error loading movies. Please try again.');
             this.hideLoading();
+            this.searchState.isSearching = false;
         }
+    }
+
+    async fetchStreamingInfoCached(movieId) {
+        // Check cache first
+        const cached = this.getCachedStreamingInfo(movieId);
+        if (cached !== null) {
+            return cached;
+        }
+
+        // Fetch fresh data
+        const data = await this.fetchStreamingInfo(movieId);
+
+        // Cache the result
+        this.setCachedStreamingInfo(movieId, data);
+
+        return data;
     }
 
     async fetchStreamingInfo(movieId) {
@@ -1114,9 +1340,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 // TODOS
-// - implement caching to reduce API calls
-// - add request throttling/queuing
+// x implement caching to reduce API calls
+// x add request throttling/queuing
 // - implement proper error handling for rate limit responses (HTTP 429) and cache responses where appropriate
 // - add attribution to TMDB and JustWatch (plus links)
-// - add TMDB authentication (login, API requests using session_id)
-// - add instructions about how to import IMDB watchlist to TMDB
+// x add TMDB authentication (login, API requests using session_id)
+// - add instructions about how to import IMDB watchlist to TMDB (https://www.themoviedb.org/settings/import-list, need to be logged in)
+// - message if retrieval is taking too long, or if several options are selected
+// - add this disclaimer: 
+//      This [website, program, service, application, product] uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB.
+// - add this credit thingy:
+// Made with ❤️ and 🌀 (hyperfocus) by Mariana Moreira
+// Find the source code on GitHub
