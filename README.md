@@ -4,7 +4,7 @@
 
 A client-side web application that helps you discover which movies from your TMDB watchlist are available on your streaming services, across multiple countries.
 
-🔗 **[Live Demo](https://stream-my-list.netlify.app/)** (coming soon)
+🔗 **[Live Demo](https://stream-my-list.netlify.app/)**
 
 **Made for people who have too many watchlists and too little time.**
 
