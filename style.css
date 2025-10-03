@@ -461,7 +461,7 @@ select.form-control {
   display: inline-flex;
   align-items: center;
   padding: var(--space-6) var(--space-12);
-  border-radius: var(--radius-full);
+  border-radius: var(--radius-lg);
   font-weight: var(--font-weight-medium);
   font-size: var(--font-size-sm);
 }
@@ -648,7 +648,7 @@ select.form-control {
 
 .header__title {
   font-size: var(--font-size-4xl);
-  margin-bottom: var(--space-8);
+  margin: var(--space-8) 0;
   color: var(--color-text);
   position: relative;
   display: inline-block;
@@ -689,7 +689,7 @@ select.form-control {
 .header__subtitle {
   font-size: var(--font-size-lg);
   color: var(--color-text-secondary);
-  margin-bottom: var(--space-24);
+  margin: var(--space-24) 0;
 }
 
 /* Squiggly Line Decoration */
@@ -744,6 +744,10 @@ select.form-control {
 .config-status {
   margin-top: var(--space-16);
   text-align: center;
+}
+
+#config-summary > p {
+  margin: 0;
 }
 
 /* Modal Styles */
@@ -1065,6 +1069,52 @@ select.form-control {
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+/* Progress Container */
+.progress-container {
+  margin-top: var(--space-24);
+  padding: var(--space-20);
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.progress-container.hidden {
+  display: none;
+}
+
+.progress-stats {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-12);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+}
+
+.progress-bar {
+  height: 8px;
+  background: var(--color-dark-grey-700);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  margin-bottom: var(--space-16);
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-purple-medium));
+  border-radius: var(--radius-full);
+  transition: width 0.3s ease;
+  width: 0%;
+}
+
+#cancel-search {
+  width: 100%;
+  margin-top: var(--space-8);
 }
 
 /* Movies Grid */

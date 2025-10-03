@@ -62,8 +62,7 @@
 
                 <div id="config-status" class="config-status hidden">
                     <div class="status status--success">
-                        <span>✓</span>
-                        Configuration saved: <span id="config-summary"></span>
+                        <span id="config-summary"></span>
                     </div>
                 </div>
             </div>
@@ -141,7 +140,17 @@
 
             <div id="loading" class="loading hidden">
                 <div class="loading-spinner"></div>
-                <p>Finding your movies...</p>
+                <p id="loading-text">Finding your movies...</p>
+                <div id="progress-container" class="progress-container hidden">
+                    <div class="progress-stats">
+                        <span id="progress-text">Processing 0 of 0 movies...</span>
+                        <span id="found-text">Found: 0</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div id="progress-fill" class="progress-fill"></div>
+                    </div>
+                    <button id="cancel-search" class="btn btn--outline btn--small">Cancel</button>
+                </div>
             </div>
 
             <div id="movies-grid" class="movies-grid"></div>
