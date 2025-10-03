@@ -280,7 +280,7 @@ class MovieStreamingApp {
             }
 
             // Redirect to TMDB for authorization
-            const redirectUrl = `${window.location.origin}${window.location.pathname}`;
+            const redirectUrl = 'https://stream-my-list.netlify.app/';
             const authUrl = `https://www.themoviedb.org/authenticate/${data.request_token}?redirect_to=${encodeURIComponent(redirectUrl)}`;
             window.location.href = authUrl;
         } catch (error) {
